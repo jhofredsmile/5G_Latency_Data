@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Auto Data Logger</title>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 0; padding: 20px; background: #f2f2f2; }
+    h2 { text-align: center; }
+    #data-table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+    #data-table th, #data-table td { border: 1px solid #ccc; padding: 8px; text-align: center; }
+    #download { margin-top: 20px; display: block; width: 100%; padding: 10px; background-color: #007bff; color: white; border: none; font-size: 16px; border-radius: 4px; cursor: pointer; }
+    #download:hover { background-color: #0056b3; }
+  </style>
+</head>
+<body>
+  <h2>Auto Data Logger App</h2>
+  <table id="data-table">
+    <thead>
+      <tr>
+        <th>Sl No</th>
+        <th>Date</th>
+        <th>Latitude</th>
+        <th>Longitude</th>
+        <th>5G (0/1)</th>
+        <th>Latency (ms)</th>
+        <th>Device Model</th>
+      </tr>
+    </thead>
+    <tbody id="table-body"></tbody>
+  </table>
+  <button id="download">Download CSV</button>
+
+  <script>
+    let serial = 1;
+    const tableBody = document.getElementById("table-body");
+
+    async function getLatency() {
+      const start = performance.now();
+      try {
+        await fetch("https://www.google.com", { mode: "no-cors" });
+      } catch (e) {}
+      const end = performance.now();
+      return Math.round(end - start);
+    }
+
+    function getNetworkType() {
+      const connection = navigator.connection || navigator.mozConnection || navigator.webkitConnection;
+      if (connection && connection.effectiveType) {
+        return connection.effectiveType === "5g" ? 1 : 0;
+      }
+      return 0; // fallback
+    }
+
+    function getDeviceModel() {
+      return navigator.userAgent;
+    }
+
+    function logData(lat, lon, latency, is5g) {
+      const row = document.createElement("tr");
+      const date = new Date().toISOString().split("T")[0];
+      const model = getDeviceModel();
+
+      [serial++, date, lat, lon, is5g, latency, model].forEach(val => {
+        const cell = document.createElement("td");
+        cell.textContent = val;
+        row.appendChild(cell);
+      });
+      tableBody.appendChild(row);
+    }
+
+    async function collectData() {
+      if (navigator.geolocation) {
+        navigator.geolocation.getCurrentPosition(async (position) => {
+          const lat = position.coords.latitude.toFixed(6);
+          const lon = position.coords.longitude.toFixed(6);
+          const latency = await getLatency();
+          const is5g = getNetworkType();
+          logData(lat, lon, latency, is5g);
+        }, (err) => {
+          alert("GPS access denied. Cannot collect data.");
+        });
+      } else {
+        alert("Geolocation not supported.");
+      }
+    }
+
+    document.getElementById("download").addEventListener("click", () => {
+      let csv = "sl_no,date,latitude,longitude,is_5g,latency_ms,device_model\n";
+      Array.from(tableBody.children).forEach(row => {
+        let rowData = Array.from(row.children).map(td => '"' + td.textContent + '"').join(",");
+        csv += rowData + "\n";
+      });
+      const blob = new Blob([csv], { type: 'text/csv' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "data_log.csv";
+      a.click();
+      URL.revokeObjectURL(url);
+    });
+
+    // Trigger data collection on page load
+    window.onload = () => {
+      if (confirm("Do you allow the app to collect GPS and network data?")) {
+        collectData();
+      }
+    };
+  </script>
+</body>
+</html>
